@@ -1,0 +1,71 @@
+﻿@page "/medicaldiaries/delete"
+@inject IMedicalDiaryRepository medicalDiaryRepository
+@inject NavigationManager NavigationManager
+@inject IToastService ToastService
+
+@using MediBook.Domain.Abstractions
+@using MediBook.Domain.Entities
+
+<PageTitle>Deletar Agenda Médica</PageTitle>
+
+<h1>Agenda Médica</h1>
+
+<h3>Deseja mesmo deletar a agenda médica?</h3>
+<div>
+    @if (medicaldiary is null)
+    {
+        <img src="/images/loading.gif" height="120" width="120" />
+        <br />
+    }
+    else
+    {
+        <dl class="row">
+            <dt class="col-sm-2">Data</dt>
+            <dd class="col-sm-10">@medicaldiary.DateAndTime.ToString("g")</dd>
+        </dl>
+        <dl class="row">
+            <dt class="col-sm-2">Médico</dt>
+            <dd class="col-sm-10">@medicaldiary.Doctor.Name</dd>
+        </dl>
+        <dl class="row">
+            <dt class="col-sm-2">Especialidade</dt>
+            <dd class="col-sm-10">@medicaldiary.MedicalSpecialty.Name</dd>
+        </dl>
+        <FluentGrid>
+            <FluentGridItem xs="6" sm="6">
+                <EditForm method="post" Model="medicaldiary" OnValidSubmit="DeleteMedicalDiary" FormName="delete">
+                    <FluentButton Type="ButtonType.Submit" disabled="@(medicaldiary is null)" BackgroundColor="red" Color="white" Appearance="Appearance.Accent" Style="width: 100%">Deletar</FluentButton>
+                </EditForm>
+            </FluentGridItem>
+        </FluentGrid>
+
+        <div>
+            <br /><br /><br />
+            <a href="/doctors">Voltar</a>
+        </div>
+    }  
+</div>
+
+@code {
+    MedicalDiary? medicaldiary;
+
+    [SupplyParameterFromQuery]
+    public Guid MedicalDiaryId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        medicaldiary = await medicalDiaryRepository.Get(MedicalDiaryId);
+
+        if (medicaldiary is null)
+        {
+            NavigationManager.NavigateTo("notfound");
+        }
+    }
+
+    public async Task DeleteMedicalDiary()
+    {
+        await medicalDiaryRepository.Delete(MedicalDiaryId);
+        ToastService.ShowSuccess("Agenda médica deletado com sucesso");
+        NavigationManager.NavigateTo("/medicaldiaries");
+    }
+}

@@ -1,0 +1,155 @@
+﻿@page "/doctors/create";
+@using MediBook.Application.Mappers
+@using MediBook.Blazor.Components.Account
+@using MediBook.Blazor.Components.Account.Shared
+@using MediBook.Domain.Entities;
+@using MediBook.Infrastructure.Context
+@using Microsoft.AspNetCore.Identity;
+@inject MediBook.Domain.Abstractions.IDoctorRepository doctorRepository;
+@inject MediBook.Domain.Abstractions.IMedicalSpecialtyRepository medicalSpecialtyRepository;
+@inject NavigationManager navigationManager;
+@inject IUserStore<ApplicationUser> userStore;
+@inject UserManager<ApplicationUser> userManager;
+@inject IToastService ToastService;
+@rendermode InteractiveServer
+
+<PageTitle>Adicionar Médico</PageTitle>
+
+<h1>Médico</h1>
+
+<h4>Adicionar</h4>
+<hr />
+<FluentGrid>
+    <FluentGridItem xs="6" sm="6">
+        <EditForm Model="Doctor" method="post" OnValidSubmit="AddDoctor" FormName="registerDoctor" Enhance="true">
+            <DataAnnotationsValidator />
+            <FluentStack Orientation="Orientation.Vertical">
+                <FluentTextField Autofocus="true" Name="Doctor.Name" @bind-Value="Doctor.Name" Required="true" Placeholder="Nome..." Label="Nome" Style="width: 100%" />
+                <FluentValidationMessage For="() => Doctor.Name" class="text-danger" />
+                <br />
+                <FluentTextField Name="Doctor.MedicalRegistration" @bind-Value="Doctor.MedicalRegistration" Required="true" Placeholder="CRM..." Label="CRM" Style="width: 100%" />
+                <FluentValidationMessage For="() => Doctor.MedicalRegistration" class="text-danger" />
+                <br />
+                <FluentAutocomplete TOption="MedicalSpecialty"
+                                    AutoComplete="off"                                    
+                                    Width="100%"
+                                    Placeholder="Selecione especialidades"
+                                    OnOptionsSearch="@OnSearch"
+                                    MaximumSelectedOptions="3"
+                                    OptionText="@(item => item.Name)"
+                                    @bind-SelectedOptions="@SelectedMedicalSpecialties">
+                    <LabelTemplate>
+                        Especialidades <span aria-label="required" aria-hidden="true" style="padding-inline-start: calc(var(--design-unit) * 1px); color: var(--error); pointer-events: none;">*</span>
+                    </LabelTemplate>
+                </FluentAutocomplete>
+                <br />
+                <FluentTextField Name="Doctor.User.Email" @bind-Value="Doctor.User.Email" Required="true" Placeholder="name@example.com" Label="Email" Style="width: 100%" />
+                <FluentValidationMessage For="() => Doctor.User.Email" class="text-danger" />
+                <br />
+                <FluentTextField type="password" Name="Doctor.User.Password" @bind-Value="Doctor.User.Password" Required="true" Placeholder="Senha..." Label="Senha" Style="width: 100%" />
+                <FluentValidationMessage For="() => Doctor.User.Password" class="text-danger" />
+                <br />
+                <FluentTextField type="password" Name="Doctor.User.ConfirmPassword" @bind-Value="Doctor.User.ConfirmPassword" Required="true" Placeholder="Confirmar senha..." Label="Confirmar Senha" Style="width: 100%" />
+                <FluentValidationMessage For="() => Doctor.User.ConfirmPassword" class="text-danger" />
+                <br />              
+                <FluentButton Type="ButtonType.Submit" Appearance="Appearance.Accent" Style="width: 100%">Salvar</FluentButton>
+            </FluentStack>
+        </EditForm>
+    </FluentGridItem>
+</FluentGrid>
+
+<div>
+    <br /><br /><br />
+    <a href="/doctors">Voltar</a>
+</div>
+
+@code {
+    private IEnumerable<IdentityError>? identityErrors;
+    IEnumerable<MedicalSpecialty> SelectedMedicalSpecialties = Array.Empty<MedicalSpecialty>();
+
+    [SupplyParameterFromForm]
+    public Doctor Doctor { get; set; } = new("", "", true, "");
+
+    void ShowErrors()
+    {
+        if (identityErrors == null)
+        {
+            return;
+        }
+
+        foreach (var identityError in identityErrors)
+        {
+            ToastService.ShowError(identityError.Description);
+        }       
+    }
+
+    public async Task AddDoctor()
+    {
+        if (!SelectedMedicalSpecialties.Any())
+        {
+            ToastService.ShowError("Selecione ao menos uma especialidade para o médico");
+            return;
+        }
+
+        var user = CreateUser();
+
+        await userStore.SetUserNameAsync(user, Doctor.User.Email, CancellationToken.None);
+        var emailStore = GetEmailStore();
+        user.EmailConfirmed = true;
+        await emailStore.SetEmailAsync(user, Doctor.User.Email, CancellationToken.None);
+        var result = await userManager.CreateAsync(user, Doctor.User.Password);
+
+        if (!result.Succeeded)
+        {
+            identityErrors = result.Errors.Select(e => IdentityErrorMapper.MapToPortugueseIdentityError(e));
+            ShowErrors();
+            return;
+        }
+
+        Doctor.ApplicationUserId = user.Id;
+        Doctor.Active = true;
+        var doctor = await doctorRepository.Add(Doctor);
+
+        if (doctor != null && doctor.DoctorId != Guid.Empty)
+        {
+            foreach (var selectedMedicalSpecialties in SelectedMedicalSpecialties)
+            {
+                var success = await medicalSpecialtyRepository.BindWithDoctor(selectedMedicalSpecialties.MedicalSpecialtyId, doctor.DoctorId);
+
+                if (!success)
+                {
+                    ToastService.ShowToast(ToastIntent.Warning, $"A especialidade {selectedMedicalSpecialties.Name} não foi associada ao médico devido a um erro. Tente novamente.");
+                }
+            }
+        }
+
+        ToastService.ShowSuccess("Médico salvo com sucesso");
+        navigationManager.NavigateTo("/doctors");
+    }
+
+    private ApplicationUser CreateUser()
+    {
+        try
+        {
+            return Activator.CreateInstance<ApplicationUser>();
+        }
+        catch
+        {
+            throw new InvalidOperationException($"Can't create an instance of '{nameof(ApplicationUser)}'. " +
+                $"Ensure that '{nameof(ApplicationUser)}' is not an abstract class and has a parameterless constructor.");
+        }
+    }
+
+    private IUserEmailStore<ApplicationUser> GetEmailStore()
+    {
+        return (IUserEmailStore<ApplicationUser>)userStore;
+    }
+
+    private async Task OnSearch(OptionsSearchEventArgs<MedicalSpecialty> e)
+    {
+        var medicalSpecialties = await medicalSpecialtyRepository.GetAll();
+        e.Items = medicalSpecialties.Where(m => m.Name is not null &&
+                                                m.Name.StartsWith(e.Text, StringComparison.OrdinalIgnoreCase))
+                                    .OrderBy(i => i.Name);
+    }
+}

@@ -1,0 +1,108 @@
+﻿@page "/appointments"
+@inject IAppointmentRepository appointmentRepository
+@inject UserData userData
+@inject IdentityUserAccessor UserAccessor
+@inject IHttpContextAccessor httpContextAccessor
+@inject IPatientRepository patientRepository
+@inject IDoctorRepository doctorRepository
+@using MediBook.Blazor.Components.Account
+@using MediBook.Domain.Abstractions
+@using MediBook.Domain.Entities
+@using MediBook.Domain.Enums
+@using MediBook.Domain.Models
+
+<PageTitle>Consultas</PageTitle>
+
+<h1>Consultas</h1>
+
+<p>
+    <a href="appointments/create">Adicionar</a>
+</p>
+
+@if (appointments == null)
+{
+    <img src="/images/loading.gif" height="120" width="120" />
+    <br />
+}
+else
+{
+    <FluentDataGrid Items="@appointments" Pagination="@pagination">
+        <ChildContent>
+            <PropertyColumn Width="10%" Property="appointment => appointment.MedicalDiary.DateDisplay" Title="Data" Sortable="true" />
+            <PropertyColumn Width="5%" Property="appointment => appointment.MedicalDiary.TimeDisplay" Title="Horário" Sortable="true" />
+            <PropertyColumn Width="20%" Property="appointment => appointment.Patient.Name" Title="Paciente" Sortable="true" />
+            <PropertyColumn Width="20%" Property="appointment => appointment.MedicalDiary.Doctor.Name" Title="Médico" Sortable="true" />
+            <PropertyColumn Width="10%" Property="appointment => appointment.MedicalDiary.MedicalSpecialty.Name" Title="Especialidade" Sortable="true" />
+            <TemplateColumn Context="appointment" Title="Tipo da Consulta">
+                @switch (appointment.AppointmentType)
+                {
+                    case AppointmentType.First:
+                        <div>Primeira</div>
+                        break;
+                        case AppointmentType.Return:
+                        <div>Retorno</div>
+                        break;
+                        case AppointmentType.Exam:
+                        <div>Exame</div>
+                        break;
+                    case AppointmentType.Surgery:
+                        <div>Cirgurgia</div>
+                        break;
+                    default:
+                        <div></div>
+                        break;
+                }     
+            </TemplateColumn>
+            <TemplateColumn Context="appointment" Title="Status">
+                @switch (appointment.AppointmentStatus)
+                {
+                    case AppointmentStatus.Scheduled:
+                        <div>Agendada</div>
+                        break;
+                    case AppointmentStatus.Canceled:
+                        <div>Cancelada</div>
+                        break;
+                    case AppointmentStatus.Rescheduled:
+                        <div>Reagendada</div>
+                        break;
+                    default:
+                        <div></div>
+                        break;
+                }
+            </TemplateColumn>
+            <TemplateColumn Context="appointment">
+                <a href="@($"appointments/delete?appointmentId={appointment.AppointmentId}")">Cancelar</a>
+            </TemplateColumn>
+        </ChildContent>
+        <EmptyContent>
+            <FluentIcon Value="@(new Icons.Filled.Size24.PeopleList())" Color="@Color.Accent" />&nbsp; Nenhuma consulta agendada!
+        </EmptyContent>
+    </FluentDataGrid>
+
+    <FluentPaginator State="@pagination" />
+}
+
+@code {
+    IQueryable<Appointment>? appointments;
+    PaginationState pagination = new PaginationState { ItemsPerPage = 10 };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (userData.UserType == UserType.Admin)
+        {
+            appointments = (await appointmentRepository.GetAll()).AsQueryable();
+        }
+        else if (userData.UserType == UserType.Patient && httpContextAccessor.HttpContext != null)
+        {
+            var user = await UserAccessor.GetRequiredUserAsync(httpContextAccessor.HttpContext);
+            var patient = await patientRepository.GetByUser(user.Id);
+            appointments = (await appointmentRepository.GetByIdAll(patient.PatientID)).AsQueryable();
+        }
+        else if (userData.UserType == UserType.Doctor && httpContextAccessor.HttpContext != null)
+        {
+            var user = await UserAccessor.GetRequiredUserAsync(httpContextAccessor.HttpContext);
+            var doctor = await doctorRepository.GetByUser(user.Id);
+            appointments = (await appointmentRepository.GetByDoctorIdAll(doctor.DoctorId)).AsQueryable();
+        }
+    }
+}

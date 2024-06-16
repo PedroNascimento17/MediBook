@@ -1,0 +1,16 @@
+﻿@inherits LayoutComponentBase
+@layout AccountLayout
+
+<h1>Gerencie sua conta</h1>
+<hr />
+<div class="manage">
+    <FluentGrid>
+        <FluentGridItem sm="3">
+            <ManageNavMenu />
+        </FluentGridItem>
+
+        <FluentGridItem sm="9">
+            @Body
+        </FluentGridItem>
+    </FluentGrid>
+</div>

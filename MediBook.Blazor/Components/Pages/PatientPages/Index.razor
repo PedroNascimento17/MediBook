@@ -1,0 +1,43 @@
+﻿@page "/patients"
+@inject MediBook.Domain.Abstractions.IPatientRepository patientRepository
+@using MediBook.Domain.Entities
+
+<PageTitle>Pacientes</PageTitle>
+
+<h1>Pacientes</h1>
+
+<p>
+    <a href="patients/create">Adicionar</a>
+</p>
+
+@if (patients == null)
+{
+    <img src="/images/loading.gif" height="120" width="120" />
+    <br />
+}
+else
+{
+    <FluentDataGrid Items="@patients">
+        <ChildContent>
+            <PropertyColumn Property="patient => patient.Name" Width="30%" Title="Nome" Sortable="true" />
+            <PropertyColumn Property="patient => patient.ApplicationUser.Email" Width="20%" Title="Email" Sortable="true" />
+            <PropertyColumn Property="patient => patient.BirthDateDisplay" Width="10%" Title="Data de nascimento" Sortable="true" />
+            <TemplateColumn Context="patient">
+                <a href="@($"patients/edit?patientid={patient.PatientID}")">Editar</a> |
+                <a href="@($"patients/delete?patientid={patient.PatientID}")">Deletar</a>
+            </TemplateColumn>
+        </ChildContent>
+        <EmptyContent>
+            <FluentIcon Value="@(new Icons.Filled.Size24.PeopleAudience())" Color="@Color.Accent" />&nbsp; Nenhum paciente cadastrado!
+        </EmptyContent>
+    </FluentDataGrid>
+}
+
+@code {
+    IQueryable<Patient>? patients;
+
+    protected override async Task OnInitializedAsync()
+    {
+        patients = (await patientRepository.GetAll()).AsQueryable();
+    }
+}

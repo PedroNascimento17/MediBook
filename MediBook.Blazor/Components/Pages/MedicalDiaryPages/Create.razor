@@ -1,0 +1,280 @@
+﻿@page "/medicaldiaries/create"
+@inject IDoctorRepository doctorRepository
+@inject IMedicalDiaryRepository medicalDiaryRepository
+@inject NavigationManager NavigationManager
+@inject IToastService ToastService;
+@rendermode InteractiveServer
+@using MediBook.Domain.Abstractions
+@using MediBook.Domain.Entities
+
+
+<PageTitle>Adicionar Agenda Médica</PageTitle>
+
+<h1>Agenda Médica</h1>
+
+<h4>Adicionar</h4>
+<hr />
+
+<FluentGrid Justify="JustifyContent.Center">
+    <FluentGridItem xs="6" sm="6">
+        <FluentCombobox Items=@doctorOptions
+                        OptionText="@(i => i.Text)"
+                        OptionValue="@(i => i.Value)"
+                        OptionSelected="@(i => i.Selected)"
+                        AriaLabel="Médico"
+                        Width="100%"
+                        Placeholder="Selecione o médico"
+                        Multiple="false"
+                        readonly
+                        Autocomplete="ComboboxAutocomplete.List"
+                        TOption="Option<string>"
+                        SelectedOptionChanged="d => ChangeDoctor(d)">
+            <LabelTemplate>
+                Médico 
+            </LabelTemplate>
+        </FluentCombobox>      
+    </FluentGridItem>
+
+    @if (!string.IsNullOrWhiteSpace(doctorId))
+    {
+        <FluentGridItem xs="6" sm="6">
+            <FluentCombobox Items=@medicalSpecialtyOptions
+                            OptionText="@(i => i.Text)"
+                            OptionValue="@(i => i.Value)"
+                            OptionSelected="@(i => i.Selected)"
+                            TOption="Option<string>"
+                            AriaLabel="Especialidade"
+                            Width="100%"
+                            Placeholder="Selecione a especialidade"
+                            Autocomplete="ComboboxAutocomplete.List"
+                            @bind-Value="medicalSpecialtyOption"
+                            SelectedOptionChanged="m => ChangeMedicalSpecialty(m)">
+                <LabelTemplate>
+                    Especialidade
+                </LabelTemplate>
+            </FluentCombobox>
+        </FluentGridItem>       
+    }  
+    
+    @if (!string.IsNullOrWhiteSpace(medicalSpecialtyId))
+    {
+        <FluentGridItem xs="7" sm="7">
+            <FluentLabel>Data</FluentLabel>
+            <FluentCalendar Value="@(SelectedDay)" ValueChanged="@(e => Changed(e ?? DateTime.MinValue))" DisabledDateFunc="@DisabledDay" Style="width: 100%" />
+        </FluentGridItem>
+
+        <FluentGridItem xs="5" sm="5">
+            <FluentLabel>Horário</FluentLabel>
+            <FluentListbox TOption="Option<string>"
+                           Items="@times"
+                           Height="250px"
+                           OptionValue="@(p => p.Value)"
+                           OptionText="@(p => p.Text)"
+                           @bind-Value="@selectedTime" />
+        </FluentGridItem>
+        <br />
+        <FluentButton Type="ButtonType.Button" OnClick="@AddToMedicalDiaryItems" Appearance="Appearance.Accent" Style="width: 40%;text-align:center">Adicionar</FluentButton>
+        <br />
+    }
+
+    <FluentGridItem xs="12" sm="12">
+        <FluentDataGrid Items="@medicalDiaryItems">
+            <ChildContent>
+                <PropertyColumn Width="10%" Property="medicalDiary => medicalDiary.DateDisplay" Title="Data" Sortable="true" />
+                <PropertyColumn Width="10%" Property="medicalDiary => medicalDiary.TimeDisplay" Title="Horário" Sortable="true" />
+                <PropertyColumn Width="30%" Property="medicalDiary => medicalDiary.Doctor.Name" Title="Médico" Sortable="true" />
+                <PropertyColumn Width="30%" Property="medicalDiary => medicalDiary.MedicalSpecialty.Name" Title="Especialidade" Sortable="true" />
+                <TemplateColumn Context="medicalDiary">
+                    <a style="color: var(--accent-foreground-rest);text-decoration: underline;cursor:pointer;" @onclick="@(() => RemoveFromDiary(medicalDiary))">Remover</a>
+                </TemplateColumn>
+            </ChildContent>
+            <EmptyContent>
+                <FluentIcon Value="@(new Icons.Filled.Size24.Doctor())" Color="@Color.Accent" />&nbsp; Nenhuma agenda selecionada!
+            </EmptyContent>
+        </FluentDataGrid>
+    </FluentGridItem>
+
+    @if (medicalDiaryItems.Any())
+    {
+        <br />
+        <FluentButton Type="ButtonType.Button" OnClick="@SaveMedicalDiaryItems" Appearance="Appearance.Accent" Style="width: 40%;text-align:center">Salvar</FluentButton>
+    }
+</FluentGrid>
+
+<div>
+    <br /><br />
+    <a href="/medicaldiaries">Voltar</a>
+</div>
+
+@code {
+    [SupplyParameterFromForm]
+    MedicalDiary medicalDiary { get; set; } = new(DateTime.Now, true);
+    List<Option<string>> doctorOptions = [];
+    List<Option<string>> medicalSpecialtyOptions = [];
+    List<Option<string>> times = [];
+    IQueryable<MedicalDiary> medicalDiaryItems = new List<MedicalDiary>().AsQueryable();
+    IEnumerable<Doctor> doctors = null!;
+    string? doctorId;
+    string? medicalSpecialtyId;
+    string? selectedTime;
+    string? medicalSpecialtyOption;
+    bool DisabledDay(DateTime date) => date <= DateTime.Today;
+    DateTime SelectedDay = DateTime.Today.AddDays(1);
+
+    protected override async Task OnInitializedAsync()
+    {
+        doctors = await doctorRepository.GetAll();
+        doctorOptions = doctors.Select(d => new Option<string>()
+        {
+            Text = d.Name,
+            Value = d.DoctorId.ToString() 
+        }).ToList();
+    }
+
+    void ChangeDoctor(Option<string> selectedOption)
+    {
+        if (selectedOption == null)
+        {
+            return;
+        }
+
+        doctorId = selectedOption.Value;
+        medicalSpecialtyOption = "";
+        var doctor = doctors.FirstOrDefault(d => d.DoctorId.ToString() == selectedOption.Value);
+        if (doctor != null)
+        {
+            medicalSpecialtyOptions = doctor.DoctorMedicalSpecialty
+                                            .Select(d => d.MedicalSpecialty)
+                                            .Select(m => new Option<string>()
+                                            {
+                                                Text = m.Name,
+                                                Value = m.MedicalSpecialtyId.ToString()
+                                            }).ToList();            
+        }
+    }
+
+    async Task ChangeMedicalSpecialty(Option<string> selectedOption)
+    {
+        if (selectedOption == null)
+        {
+            return;
+        }
+
+        medicalSpecialtyOption = selectedOption.Text;
+        medicalSpecialtyId = selectedOption.Value;
+        await Changed(DateTime.Today.AddDays(1));
+    }
+
+    async Task Changed(DateTime date)
+    {
+        if (date == DateTime.MinValue)
+        {
+            return;
+        }
+
+        IEnumerable<MedicalDiary> medicalDiary = [];
+        SelectedDay = date;
+
+        if (doctorId is not null && medicalSpecialtyId is not null)
+        {
+            medicalDiary = await medicalDiaryRepository.GetByDoctorMedicalSpecialtyAndDate(Guid.Parse(doctorId), Guid.Parse(medicalSpecialtyId), SelectedDay);
+        }
+
+        var timesList = GenerateTimeList();
+
+        foreach (var medicalDiaryItem in medicalDiary)
+        {
+            var time = medicalDiaryItem.DateAndTime.ToString("HH:mm");
+
+            var timeOption = timesList.FirstOrDefault(t => t.Value == time);
+
+            if(timeOption != null)
+                timesList.Remove(timeOption);
+        }
+
+        times = timesList;
+    }
+
+    List<Option<string>> GenerateTimeList()
+    {
+        List<Option<string>> timeList = [];
+
+        var interval = 30;
+        var endTime = DateTime.Today.AddDays(1).AddHours(-5);
+        DateTime currentTime = DateTime.Today.AddHours(7);
+        while (currentTime < endTime)
+        {
+            timeList.Add(new Option<string>()
+            {
+                Text = currentTime.ToString("HH:mm"),
+                Value = currentTime.ToString("HH:mm")
+            });
+            currentTime = currentTime.AddMinutes(interval);
+        }
+
+        return timeList;
+    }
+
+    void AddToMedicalDiaryItems()
+    {
+        var diaryDate = SelectedDay;
+        DateTime.TryParseExact(selectedTime, "HH:mm", null, System.Globalization.DateTimeStyles.None, out var time);
+        diaryDate = diaryDate.AddHours(time.Hour);
+        diaryDate = diaryDate.AddMinutes(time.Minute);
+
+        if (doctorId is null || medicalSpecialtyId is null)
+        {
+            return;
+        }      
+
+        var guidDoctorId = Guid.Parse(doctorId);
+        var guidMedicalSpecialtyId = Guid.Parse(medicalSpecialtyId);
+
+        if (medicalDiaryItems.Any(m => m.DoctorId == guidDoctorId && 
+                                       m.MedicalSpecialtyId == guidMedicalSpecialtyId && 
+                                       m.DateAndTime == diaryDate))
+        {
+            ToastService.ShowWarning("Agenda já adicionada");
+            return;
+        }
+
+        var doctor = doctors.FirstOrDefault(d => d.DoctorId == guidDoctorId);
+        var medicalSpecialty = doctor?.DoctorMedicalSpecialty.FirstOrDefault(d => d.MedicalSpecialtyId == guidMedicalSpecialtyId)?.MedicalSpecialty;
+
+        var medicalDiary = new MedicalDiary(diaryDate, true)
+        {
+            MedicalSpecialtyId = guidMedicalSpecialtyId,
+            DoctorId = guidDoctorId,
+            MedicalSpecialty = medicalSpecialty ?? new MedicalSpecialty(""),
+            Doctor = doctor ?? new Doctor("", "", false, "")
+        };
+
+        var medicalDiaryItemsList = medicalDiaryItems.ToList();
+        medicalDiaryItemsList.Add(medicalDiary);
+        medicalDiaryItems = medicalDiaryItemsList.AsQueryable();
+    }
+
+    async Task SaveMedicalDiaryItems()
+    {
+        try
+        {
+            foreach (var medicalDiaryItem in medicalDiaryItems)
+            {
+                await medicalDiaryRepository.Add(medicalDiaryItem);
+            }
+            ToastService.ShowSuccess("Agenda salva com sucesso");
+            NavigationManager.NavigateTo("/medicaldiaries");
+        }
+        catch
+        {
+            ToastService.ShowError("Ocorreu um erro ao salvar a agenda. Revise os dados e tente novamente");
+        }
+    }
+
+    void RemoveFromDiary(MedicalDiary medicalDiary)
+    {
+        var medicalDiaryItemsList = medicalDiaryItems.ToList();
+        medicalDiaryItemsList.Remove(medicalDiary);
+        medicalDiaryItems = medicalDiaryItemsList.AsQueryable();
+    }
+}

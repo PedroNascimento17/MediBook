@@ -1,0 +1,52 @@
+﻿@page "/doctors"
+@inject MediBook.Domain.Abstractions.IDoctorRepository doctorRepository
+@using MediBook.Domain.Entities
+
+<PageTitle>Médicos</PageTitle>
+
+<h1>Médicos</h1>
+
+<p>
+    <a href="doctors/create">Adicionar</a>
+</p>
+
+@if (doctors == null)
+{
+    <img src="/images/loading.gif" height="120" width="120" />
+    <br />
+}
+else
+{
+    <FluentDataGrid Items="@doctors">
+        <ChildContent>
+            <PropertyColumn Width="30%" Property="doctor => doctor.Name" Title="Nome" Sortable="true" />
+            <PropertyColumn Width="5%" Property="doctor => doctor.MedicalRegistration" Title="CRM" Sortable="true" />
+            <PropertyColumn Width="10%" Property="doctor => doctor.ApplicationUser.Email" Title="Usuário" Sortable="true" />
+            <TemplateColumn Context="doctor" Title="Especialidades">
+                @foreach (var doctorMedicalSpecialty in doctor.DoctorMedicalSpecialty.Where(d => d.Active).Select(d => d.MedicalSpecialty))
+                {
+                    <FluentBadge Appearance="Appearance.Accent" Style="margin-right: 10px">
+                        @doctorMedicalSpecialty.Name
+                    </FluentBadge>                    
+                }
+            </TemplateColumn>
+            <TemplateColumn Context="doctor">
+                <a href="@($"doctors/edit?doctorid={doctor.DoctorId}")">Editar</a> |
+                <a href="@($"doctors/delete?doctorid={doctor.DoctorId}")">Deletar</a>
+            </TemplateColumn>
+        </ChildContent>
+        <EmptyContent>
+            <FluentIcon Value="@(new Icons.Filled.Size24.Doctor())" Color="@Color.Accent" />&nbsp; Nenhum doutor cadastrado!
+        </EmptyContent>
+    </FluentDataGrid>
+}
+
+@code {
+    IQueryable<Doctor>? doctors;
+
+    protected override async Task OnInitializedAsync()
+    {
+        doctors = (await doctorRepository.GetAll()).AsQueryable();
+    }
+}
+

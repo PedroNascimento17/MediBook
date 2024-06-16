@@ -1,0 +1,66 @@
+﻿@page "/doctors/delete"
+@using MediBook.Domain.Entities
+@inject MediBook.Domain.Abstractions.IDoctorRepository doctorRepository
+@inject NavigationManager NavigationManager
+@inject IToastService ToastService
+
+<PageTitle>Deletar Médico</PageTitle>
+
+<h1>Médico</h1>
+
+<h3>Deseja mesmo deletar o médico?</h3>
+<hr />
+<div>
+    @if (doctor is null)
+    {
+        <img src="/images/loading.gif" height="120" width="120" />
+        <br />
+    }
+    else
+    {
+        <dl class="row">
+            <dt class="col-sm-2">Nome</dt>
+            <dd class="col-sm-10">@doctor.Name</dd>
+        </dl>
+        <dl class="row">
+            <dt class="col-sm-2">Nome</dt>
+            <dd class="col-sm-10">@doctor.ApplicationUser.Email</dd>
+        </dl>
+        <FluentGrid>
+            <FluentGridItem xs="6" sm="6">
+                <EditForm method="post" Model="doctor" OnValidSubmit="DeleteDoctor" FormName="delete">
+                    <FluentButton Type="ButtonType.Submit" disabled="@(doctor is null)" BackgroundColor="red" Color="white" Appearance="Appearance.Accent" Style="width: 100%">Deletar</FluentButton>
+                </EditForm>
+            </FluentGridItem>
+        </FluentGrid>
+    }
+
+    <div>
+        <br /><br /><br />
+        <a href="/doctors">Voltar</a>
+    </div>
+</div>
+
+@code {
+    Doctor? doctor;
+
+    [SupplyParameterFromQuery]
+    public Guid DoctorId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        doctor = await doctorRepository.Get(DoctorId);
+
+        if (doctor is null)
+        {
+            NavigationManager.NavigateTo("notfound");
+        }
+    }
+
+    public async Task DeleteDoctor()
+    {
+        await doctorRepository.Delete(DoctorId);
+        ToastService.ShowSuccess("Médico deletado com sucesso");
+        NavigationManager.NavigateTo("/doctors");
+    }
+}

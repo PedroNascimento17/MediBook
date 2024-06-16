@@ -1,0 +1,73 @@
+﻿@page "/MedicalSpecialties/edit";
+@using MediBook.Domain.Entities;
+@inject MediBook.Domain.Abstractions.IMedicalSpecialtyRepository medicalSpecialtyRepository;
+@inject IToastService ToastService;
+@inject NavigationManager NavigationManager;
+@rendermode InteractiveServer
+
+<PageTitle>Editar Especialidade</PageTitle>
+
+<h1>Especialidade</h1>
+
+<h4>Editar</h4>
+<hr />
+
+@if (MedicalSpecialty is null)
+{
+    <img src="/images/loading.gif" height="120" width="120" />
+    <br />
+}
+else
+{
+    <FluentGrid>
+        <FluentGridItem xs="6" sm="6">
+            <EditForm Model="MedicalSpecialty" method="post" OnValidSubmit="UpdateMedicalSpecialty" FormName="editMedicalSpecialty" Enhance="true">
+                <DataAnnotationsValidator />
+                <FluentValidationSummary class="text-danger" role="alert" />
+                <FluentStack Orientation="Orientation.Vertical">
+                    <FluentTextField Name="MedicalSpecialty.Name" @bind-Value="MedicalSpecialty.Name" Required="true" Placeholder="Especialidade..." Label="Nome" Style="width: 100%" />
+                    <FluentValidationMessage For="() => MedicalSpecialty.Name" class="text-danger" />
+                    <br />
+                    <FluentButton Type="ButtonType.Submit" Appearance="Appearance.Accent" Style="width: 100%">Salvar</FluentButton>
+                </FluentStack>
+            </EditForm>
+        </FluentGridItem>
+    </FluentGrid>
+}
+
+<div>
+    <br /><br /><br />
+    <a href="/medicalspecialties">Voltar</a>
+</div>
+
+@code {
+    [SupplyParameterFromQuery]
+    public Guid MedicalSpecialtyId { get; set; }
+
+    [SupplyParameterFromForm]
+    public MedicalSpecialty? MedicalSpecialty { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        MedicalSpecialty ??= await medicalSpecialtyRepository.Get(MedicalSpecialtyId);
+
+        if (MedicalSpecialty is null)
+        {
+            NavigationManager.NavigateTo("notfound");
+        }
+    }
+
+    public async Task UpdateMedicalSpecialty()
+    {
+        if (MedicalSpecialty == null)
+        {
+            NavigationManager.NavigateTo("notfound");
+            return;
+        }
+
+        await medicalSpecialtyRepository.Update(MedicalSpecialty);
+
+        ToastService.ShowSuccess("Especialidade salva com sucesso");
+        NavigationManager.NavigateTo("/medicalspecialties");
+    }
+}

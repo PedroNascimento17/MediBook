@@ -1,0 +1,219 @@
+﻿@page "/Doctors/edit"
+
+@inject MediBook.Domain.Abstractions.IDoctorRepository doctorRepository
+@inject MediBook.Domain.Abstractions.IMedicalSpecialtyRepository medicalSpecialtyRepository
+@inject NavigationManager NavigationManager
+@inject IToastService ToastService
+@inject UserManager<ApplicationUser> UserManager
+@inject IdentityRedirectManager RedirectManager
+@inject SignInManager<ApplicationUser> SignInManager
+@inject IHttpContextAccessor httpContextAccessor
+@inject IdentityUserAccessor UserAccessor
+@rendermode InteractiveServer
+
+@using MediBook.Application.Mappers
+@using MediBook.Blazor.Components.Account
+@using MediBook.Domain.Entities
+@using Microsoft.AspNetCore.Identity
+
+
+<PageTitle>Editar Médico</PageTitle>
+
+<h1>Médico</h1>
+
+<h4>Editar</h4>
+<hr />
+
+@if (Doctor is null)
+{
+    <img src="/images/loading.gif" height="120" width="120" />
+    <br />
+}
+else
+{
+    <FluentGrid>
+        <FluentGridItem xs="6" sm="6">
+            <EditForm Model="Doctor" method="post" OnValidSubmit="UpdateDoctor" FormName="updateDoctor" Enhance="true">
+                <DataAnnotationsValidator />
+                <FluentStack Orientation="Orientation.Vertical">
+                    <FluentTextField Autofocus="true" Name="Doctor.Name" @bind-Value="Doctor.Name" Required="true" Placeholder="Nome..." Label="Nome" Style="width: 100%" />
+                    <FluentValidationMessage For="() => Doctor.Name" class="text-danger" />
+                    <br />
+                    <FluentTextField Name="Doctor.MedicalRegistration" @bind-Value="Doctor.MedicalRegistration" Required="true" Placeholder="CRM..." Label="CRM" Style="width: 100%" />
+                    <FluentValidationMessage For="() => Doctor.MedicalRegistration" class="text-danger" />
+                    <br />
+                    <FluentAutocomplete TOption="MedicalSpecialty"
+                                        AutoComplete="off"
+                                        Width="100%"
+                                        Placeholder="Selecione especialidades"
+                                        OnOptionsSearch="@OnSearch"
+                                        MaximumSelectedOptions="3"
+                                        OptionText="@(item => item.Name)"
+                                        @bind-SelectedOptions="@SelectedMedicalSpecialties">
+                        <LabelTemplate>
+                            Especialidades <span aria-label="required" aria-hidden="true" style="padding-inline-start: calc(var(--design-unit) * 1px); color: var(--error); pointer-events: none;">*</span>
+                        </LabelTemplate>
+                    </FluentAutocomplete>
+
+                    <br />
+                    <FluentTextField Name="Doctor.ApplicationUser.Email" @bind-Value="Doctor.ApplicationUser.Email" Required="true" Placeholder="name@example.com" Label="Email" Style="width: 100%" />
+                    <FluentValidationMessage For="() => Doctor.ApplicationUser.Email" class="text-danger" />
+                    <br />
+                    <FluentSwitch Style="width: 150px;" @bind-Value="changePassword">Mudar senha</FluentSwitch>
+                    <br />
+
+                    @if (changePassword)
+                    {
+                        <FluentStack Orientation="Orientation.Vertical">
+                            <FluentTextField type="password" Name="Doctor.User.OldPassword" @bind-Value="Doctor.User.OldPassword" Required="@changePassword" Placeholder="Senha atual..." Label="Senha Atual" Style="width: 100%" />
+                            <FluentValidationMessage For="() => Doctor.User.OldPassword" class="text-danger" />
+                            <br />
+                            <FluentTextField type="password" Name="Doctor.User.Password" @bind-Value="Doctor.User.Password" Required="@changePassword" Placeholder="Nova senha..." Label="Nova Senha" Style="width: 100%" />
+                            <FluentValidationMessage For="() => Doctor.User.Password" class="text-danger" />
+                            <br />
+                            <FluentTextField type="password" Name="Doctor.User.ConfirmPassword" @bind-Value="Doctor.User.ConfirmPassword" Required="@changePassword" Placeholder="Confirmar senha..." Label="Confirmar Senha" Style="width: 100%" />
+                            <FluentValidationMessage For="() => Doctor.User.ConfirmPassword" class="text-danger" />
+                            <br />
+                        </FluentStack>
+                    }      
+                    
+                    <FluentButton Type="ButtonType.Submit" Appearance="Appearance.Accent" Style="width: 100%">Salvar</FluentButton>
+                </FluentStack>
+            </EditForm>
+        </FluentGridItem>
+    </FluentGrid>
+}
+
+<div>
+    <br /><br />
+    <a href="/doctors">Voltar</a>
+</div>
+
+@code {
+    bool changePassword = false;
+    private IEnumerable<IdentityError>? identityErrors;
+    IEnumerable<MedicalSpecialty> SelectedMedicalSpecialties = Array.Empty<MedicalSpecialty>();
+
+    [SupplyParameterFromQuery]
+    public Guid DoctorId { get; set; }
+
+    [SupplyParameterFromForm]
+    public Doctor? Doctor { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (DoctorId == Guid.Empty && httpContextAccessor.HttpContext != null)
+        {
+            var user = await UserAccessor.GetRequiredUserAsync(httpContextAccessor.HttpContext);
+            Doctor ??= await doctorRepository.GetByUser(user.Id);
+        }
+
+        Doctor ??= await doctorRepository.Get(DoctorId);
+
+        if (Doctor is null)
+        {
+            NavigationManager.NavigateTo("notfound");
+            return;
+        }
+
+        SelectedMedicalSpecialties = Doctor.DoctorMedicalSpecialty.Select(d => d.MedicalSpecialty);
+    }
+
+    void ShowErrors()
+    {
+        if (identityErrors == null)
+        {
+            return;
+        }
+
+        foreach (var identityError in identityErrors)
+        {
+            ToastService.ShowError(identityError.Description);
+        }
+    }
+
+    public async Task UpdateDoctor()
+    {
+        if (Doctor == null)
+        {
+            NavigationManager.NavigateTo("notfound");
+            return;
+        }
+
+        if (!SelectedMedicalSpecialties.Any())
+        {
+            ToastService.ShowError("Selecione ao menos uma especialidade para o médico");
+            return;
+        }
+
+        foreach (var selectedMedicalSpecialties in SelectedMedicalSpecialties)
+        {
+            if (Doctor.DoctorMedicalSpecialty.Any(d => d.MedicalSpecialtyId == selectedMedicalSpecialties.MedicalSpecialtyId))
+            {
+                continue;
+            }
+
+            var success = await medicalSpecialtyRepository.BindWithDoctor(selectedMedicalSpecialties.MedicalSpecialtyId, Doctor.DoctorId);
+
+            if (!success)
+            {
+                ToastService.ShowToast(ToastIntent.Warning, $"A especialidade {selectedMedicalSpecialties.Name} não foi associada ao médico devido a um erro. Tente novamente.");
+            }
+        }
+
+        foreach (var doctorMedicalSpecialty in Doctor.DoctorMedicalSpecialty.Where(d => !SelectedMedicalSpecialties.Any(s => s.MedicalSpecialtyId == d.MedicalSpecialtyId)))
+        {
+            await medicalSpecialtyRepository.UnbindWithDoctor(doctorMedicalSpecialty.MedicalSpecialtyId, Doctor.DoctorId);
+        }
+
+        var updated = await doctorRepository.Update(Doctor);
+
+        if (!updated)
+        {
+            ToastService.ShowError("Não foi possível alterar o médico. Revise os dados e tente novamente");
+            return;
+        }
+
+        ToastService.ShowSuccess("Médico salvo com sucesso");
+
+        var changed = true;
+
+        if (changePassword)
+        {
+            changed = await ChangePassword();
+        }
+
+        if (changed)
+        {
+            NavigationManager.NavigateTo("/doctors");
+        }      
+    }
+
+    private async Task<bool> ChangePassword()
+    {
+        if (Doctor == null)
+        {
+            NavigationManager.NavigateTo("notfound");
+            return false;
+        }
+
+        var changePasswordResult = await UserManager.ChangePasswordAsync(Doctor.ApplicationUser, Doctor.User.OldPassword, Doctor.User.Password);
+        if (!changePasswordResult.Succeeded)
+        {
+            identityErrors = changePasswordResult.Errors.Select(e => IdentityErrorMapper.MapToPortugueseIdentityError(e));
+            ShowErrors();
+            return false;
+        }
+
+        ToastService.ShowSuccess("Senha alterada com sucesso");
+        return true;
+    }
+
+    private async Task OnSearch(OptionsSearchEventArgs<MedicalSpecialty> e)
+    {
+        var medicalSpecialties = await medicalSpecialtyRepository.GetAll();
+        e.Items = medicalSpecialties.Where(m => m.Name is not null &&
+                                                m.Name.StartsWith(e.Text, StringComparison.OrdinalIgnoreCase))
+                                    .OrderBy(i => i.Name);
+    }
+}

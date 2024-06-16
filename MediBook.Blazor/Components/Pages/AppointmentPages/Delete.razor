@@ -1,0 +1,76 @@
+﻿@page "/appointments/delete"
+@inject MediBook.Infrastructure.Context.ApplicationDbContext DB
+@inject NavigationManager NavigationManager
+@inject IAppointmentRepository appointmentRepository
+@inject IToastService ToastService
+@using Microsoft.EntityFrameworkCore
+@using MediBook.Domain.Abstractions
+@using MediBook.Domain.Entities
+
+<PageTitle>Cancelar Consulta</PageTitle>
+
+<h1>Consulta</h1>
+
+<h3>Deseja mesmo cancelar a Consulta?</h3>
+<hr />
+<div>
+    @if (appointment is null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else {
+        <dl class="row">
+            <dt class="col-sm-2">Paciente</dt>
+            <dd class="col-sm-10">@appointment.Patient.Name</dd>
+        </dl>
+        <dl class="row">
+            <dt class="col-sm-2">Data/Hora</dt>
+            <dd class="col-sm-10">@appointment.MedicalDiary.DateAndTime.ToString("dd/MM/yyyy HH:ss")</dd>
+        </dl>
+        <dl class="row">
+            <dt class="col-sm-2">Médico</dt>
+            <dd class="col-sm-10">@appointment.MedicalDiary.Doctor.Name</dd>
+        </dl>
+        <dl class="row">
+            <dt class="col-sm-2">Especialiade</dt>
+            <dd class="col-sm-10">@appointment.MedicalDiary.MedicalSpecialty.Name</dd>
+        </dl>
+        <dl class="row">
+            <dt class="col-sm-2">AppointmentStatus</dt>
+            <dd class="col-sm-10">@appointment.AppointmentStatus</dd>
+        </dl>
+
+        <FluentGrid>
+            <FluentGridItem xs="6" sm="6">
+                <EditForm method="post" Model="appointment" OnValidSubmit="CancelAppointment" FormName="delete">
+                    <FluentButton Type="ButtonType.Submit" disabled="@(appointment is null)" BackgroundColor="red" Color="white" Appearance="Appearance.Accent" Style="width: 100%">Cancelar</FluentButton>
+                </EditForm>
+            </FluentGridItem>
+        </FluentGrid>
+    }
+</div>
+
+@code {
+    Appointment? appointment;
+
+    [SupplyParameterFromQuery]
+    public Guid AppointmentId { get; set; }
+    List<Option<string>> appointmentStatus = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        appointment = await appointmentRepository.Get(AppointmentId);
+
+        if (appointment is null)
+        {
+            NavigationManager.NavigateTo("notfound");
+        }
+    }
+
+    public async Task CancelAppointment()
+    {
+        await appointmentRepository.Delete(AppointmentId);
+        ToastService.ShowSuccess("Consulta cancelada com sucesso");
+        NavigationManager.NavigateTo("/appointments");
+    }
+}

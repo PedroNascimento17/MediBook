@@ -1,0 +1,71 @@
+﻿@page "/medicaldiaries"
+@inject IMedicalDiaryRepository medicalDiaryRepository
+@inject UserData userData
+@inject IdentityUserAccessor UserAccessor
+@inject IHttpContextAccessor httpContextAccessor
+@inject IDoctorRepository doctorRepository
+@using MediBook.Blazor.Components.Account
+@using MediBook.Domain.Entities
+@using MediBook.Domain.Abstractions
+@using MediBook.Domain.Models
+@rendermode InteractiveServer
+
+<PageTitle>Agenda Médica</PageTitle>
+
+<h1>Agenda Médica</h1>
+
+@if (userData.UserType == UserType.Admin)
+{
+    <p>
+        <a href="medicaldiaries/create">Adicionar</a>
+    </p>
+}
+
+
+@if (medicalDiaryItems == null)
+{
+    <img src="/images/loading.gif" height="120" width="120" />
+    <br />
+}
+else
+{
+    <FluentDataGrid Items="@medicalDiaryItems" Pagination="@pagination">
+        <ChildContent>
+            <PropertyColumn Width="10%" Property="medicalDiary => medicalDiary.DateDisplay" Title="Data" Sortable="true" />
+            <PropertyColumn Width="10%" Property="medicalDiary => medicalDiary.TimeDisplay" Title="Horário" Sortable="true" />
+            <PropertyColumn Width="30%" Property="medicalDiary => medicalDiary.Doctor.Name" Title="Médico" Sortable="true" />
+            <PropertyColumn Width="30%" Property="medicalDiary => medicalDiary.MedicalSpecialty.Name" Title="Especialidade" Sortable="true" />
+            @if (userData.UserType == UserType.Admin)
+            {
+                <TemplateColumn Context="medicalDiary">
+                    <a href="@($"medicaldiaries/delete?medicalDiaryId={medicalDiary.MedicalDiaryId}")">Deletar</a>
+                </TemplateColumn>           
+            }                              
+        </ChildContent>
+        <EmptyContent>
+            <FluentIcon Value="@(new Icons.Filled.Size24.Doctor())" Color="@Color.Accent" />&nbsp; Nenhuma agenda selecionada!
+        </EmptyContent>
+    </FluentDataGrid>
+
+    <FluentPaginator State="@pagination" />
+}
+
+@code{
+    IQueryable<MedicalDiary>? medicalDiaryItems;
+    PaginationState pagination = new PaginationState { ItemsPerPage = 10 };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (userData.UserType == UserType.Admin)
+        {
+            medicalDiaryItems = (await medicalDiaryRepository.GetAll()).OrderBy(m => m.DateAndTime).AsQueryable();
+        }
+        else if (userData.UserType == UserType.Doctor && httpContextAccessor.HttpContext != null)
+        {
+            var user = await UserAccessor.GetRequiredUserAsync(httpContextAccessor.HttpContext);
+            var doctor = await doctorRepository.GetByUser(user.Id);
+            medicalDiaryItems = (await medicalDiaryRepository.GetAllByDoctor(doctor.DoctorId)).OrderBy(m => m.DateAndTime).AsQueryable();
+        }
+    }
+}
+

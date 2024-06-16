@@ -1,0 +1,192 @@
+﻿@page "/patients/create"
+@inject NavigationManager NavigationManager;
+@inject IUserStore<ApplicationUser> userStore;
+@inject UserManager<ApplicationUser> userManager;
+@inject IToastService ToastService;
+@inject IPatientRepository patientRepository;
+@inject IZipService zipService;
+@rendermode InteractiveServer
+@using MediBook.Application.Mappers
+@using MediBook.Domain.Abstractions
+@using MediBook.Domain.Entities
+@using MediBook.Domain.Models
+@using Microsoft.AspNetCore.Identity
+
+<PageTitle>Adicionar Paciente</PageTitle>
+
+<h1>Paciente</h1>
+
+<h4>Adicionar</h4>
+<hr />
+<FluentGrid>
+    <FluentGridItem xs="6" sm="6">
+        <EditForm method="post" Model="Patient" OnValidSubmit="AddPatient" FormName="create" Enhance>
+            <DataAnnotationsValidator />
+            <FluentStack Orientation="Orientation.Vertical">
+                <FluentTextField Name="Patient.Name" @bind-Value="Patient.Name" Required="true" Placeholder="Nome..." Label="Nome" Style="width: 100%" />
+                <FluentValidationMessage For="() => Patient.Name" class="text-danger" />
+                <br />                
+                <FluentTextField Name="Patient.Cpf" @bind-Value="Patient.Cpf" Placeholder="CPF..." Label="CPF" Style="width: 100%" />
+                <FluentValidationMessage For="() => Patient.Cpf" class="text-danger" />
+                <br />
+                <FluentDatePicker Name="Patient.BirthDate" @bind-Value="@Patient.BirthDate" Label="Data de nascimento" Style="width: 100%" />
+                <FluentValidationMessage For="() => Patient.BirthDate" class="text-danger" />
+                <br />
+                <FluentRadioGroup Name="Patient.Gender" @bind-Value="Patient.Gender" Label="Sexo">
+                    <FluentRadio Value="@("m")">Masculino</FluentRadio>
+                    <FluentRadio Value="@("f")">Feminino</FluentRadio>
+                </FluentRadioGroup>
+                <FluentValidationMessage For="() => Patient.Gender" class="text-danger" />
+                <br />
+                <FluentTextField @onfocusout="LoadCep" Name="Patient.ZipCode" @bind-Value="Patient.ZipCode" Label="CEP" Style="width: 100%" />
+                <FluentValidationMessage For="() => Patient.ZipCode" class="text-danger" />
+
+                @if (ZipData is not null)
+                {
+                    <FluentGrid AdaptiveRendering="true" Style="background-color: var(--neutral-layer-3); padding: 4px;">
+                        <FluentGridItem sm="6">
+                            <div class="card">
+                                <FluentLabel><b>Logradouro:</b></FluentLabel>
+                                <FluentLabel>@ZipData.Logradouro</FluentLabel>
+                            </div>
+                        </FluentGridItem>
+                        <FluentGridItem sm="6">
+                            <div class="card">
+                                <FluentLabel><b>Bairro:</b></FluentLabel>
+                                <FluentLabel>@ZipData.Bairro</FluentLabel>
+                            </div>
+                        </FluentGridItem>
+                        <FluentGridItem sm="7">
+                            <div class="card">
+                                <FluentLabel><b>Cidade:</b></FluentLabel>
+                                <FluentLabel>@ZipData.Localidade</FluentLabel>
+                            </div>
+                        </FluentGridItem>
+                        <FluentGridItem sm="5">
+                            <div class="card">
+                                <FluentLabel><b>UF:</b></FluentLabel>
+                                <FluentLabel>@ZipData.Uf</FluentLabel>
+                            </div>
+                        </FluentGridItem> 
+                        <br />
+                        <br />
+                    </FluentGrid>
+                }
+
+                <br />
+                <FluentNumberField Name="Patient.AddressNumber" @bind-Value="Patient.AddressNumber" Label="Número" Style="width: 100%" />
+                <FluentValidationMessage For="() => Patient.AddressNumber" class="text-danger" />
+                <br />
+                <FluentTextField Name="Patient.AddressComplement" @bind-Value="Patient.AddressComplement" Label="Complemento" Style="width: 100%" />
+                <FluentValidationMessage For="() => Patient.AddressComplement" class="text-danger" />
+                <br />
+                <FluentTextField Name="Patient.Email" @bind-Value="Patient.User.Email" Required="true" Placeholder="Email..." Label="Email" Style="width: 100%" />
+                <FluentValidationMessage For="() => Patient.User.Email" class="text-danger" />
+                <br />
+                <FluentTextField type="password" Name="Patient.User.Password" @bind-Value="Patient.User.Password" Required="true" Placeholder="Senha..." Label="Senha" Style="width: 100%" />
+                <FluentValidationMessage For="() => Patient.User.Password" class="text-danger" />
+                <br />
+                <FluentTextField type="password" Name="Patient.User.ConfirmPassword" @bind-Value="Patient.User.ConfirmPassword" Required="true" Placeholder="Confirmar senha..." Label="Confirmar Senha" Style="width: 100%" />
+                <FluentValidationMessage For="() => Patient.User.ConfirmPassword" class="text-danger" />
+                <br />
+                <FluentButton Type="ButtonType.Submit" Appearance="Appearance.Accent" Style="width: 100%">Salvar</FluentButton>
+            </FluentStack>
+        </EditForm>
+    </FluentGridItem>
+</FluentGrid>
+
+<div>
+    <br /><br /><br />
+    <a href="/patients">Voltar</a>
+</div>
+
+@code {
+    private IEnumerable<IdentityError>? identityErrors;
+    [SupplyParameterFromForm]
+    public Patient Patient { get; set; } = new("", "", "", 0, "", null, "m", true, "");
+    public ZipData? ZipData { get; set; }
+
+    public async Task AddPatient()
+    {
+        var user = CreateUser();
+
+        await userStore.SetUserNameAsync(user, Patient.User.Email, CancellationToken.None);
+        var emailStore = GetEmailStore();
+        user.EmailConfirmed = true;
+        await emailStore.SetEmailAsync(user, Patient.User.Email, CancellationToken.None);
+        var result = await userManager.CreateAsync(user, Patient.User.Password);
+
+        if (!result.Succeeded)
+        {
+            identityErrors = result.Errors.Select(e => IdentityErrorMapper.MapToPortugueseIdentityError(e));
+            ShowErrors();
+            return;
+        }
+
+        Patient.ApplicationUserId = user.Id;
+        Patient.Active = true;
+
+        try
+        {
+            await patientRepository.Add(Patient);
+        }
+        catch (Exception ex)
+        {
+
+            throw ex;
+        }
+
+
+        ToastService.ShowSuccess("Paciente salvo com sucesso");
+        NavigationManager.NavigateTo("/patients");
+    }
+
+    private ApplicationUser CreateUser()
+    {
+        try
+        {
+            return Activator.CreateInstance<ApplicationUser>();
+        }
+        catch
+        {
+            throw new InvalidOperationException($"Can't create an instance of '{nameof(ApplicationUser)}'. " +
+                $"Ensure that '{nameof(ApplicationUser)}' is not an abstract class and has a parameterless constructor.");
+        }
+    }
+
+    private IUserEmailStore<ApplicationUser> GetEmailStore()
+    {
+        return (IUserEmailStore<ApplicationUser>)userStore;
+    }
+
+    void ShowErrors()
+    {
+        if (identityErrors == null)
+        {
+            return;
+        }
+
+        foreach (var identityError in identityErrors)
+        {
+            ToastService.ShowError(identityError.Description);
+        }
+    }
+
+    async Task LoadCep(FocusEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(Patient.ZipCode) || Patient.ZipCode.Length < 8)
+        {
+            return; 
+        }
+
+        var zipData = await zipService.GetZip(Patient.ZipCode ?? "");
+
+        if (string.IsNullOrWhiteSpace(zipData.Localidade) && !string.IsNullOrWhiteSpace(zipData.Logradouro))
+        {
+            ToastService.ShowWarning(zipData?.Logradouro ?? "");
+            return;
+        }
+
+        ZipData = zipData;
+    }
+}

@@ -1,0 +1,42 @@
+﻿@page "/medicalspecialties"
+@rendermode InteractiveServer
+@inject MediBook.Domain.Abstractions.IMedicalSpecialtyRepository medicalSpecialtyRepository
+@using MediBook.Domain.Entities
+
+<PageTitle>Especialidades</PageTitle>
+
+<h1>Especialidades</h1>
+
+<p>
+    <a href="medicalspecialties/create">Adicionar</a>
+</p>
+
+@if (medicalSpecialties == null)
+{
+    <img src="/images/loading.gif" height="120" width="120" />
+    <br />
+}
+else
+{
+    <FluentDataGrid Items="@medicalSpecialties">
+        <ChildContent>
+            <PropertyColumn Width="80%" Property="medicalspecialty => medicalspecialty.Name" Title="Nome" Sortable="true" />
+            <TemplateColumn Context="medicalspecialty">
+                <a href="@($"medicalspecialties/edit?medicalspecialtyid={medicalspecialty.MedicalSpecialtyId}")">Editar</a> |
+                <a href="@($"medicalspecialties/delete?medicalspecialtyid={medicalspecialty.MedicalSpecialtyId}")">Deletar</a>
+            </TemplateColumn>
+        </ChildContent>
+        <EmptyContent>
+            <FluentIcon Value="@(new Icons.Filled.Size24.AddSquare())" Color="@Color.Accent" />&nbsp; Nenhuma especialidade cadastrada!
+        </EmptyContent>
+    </FluentDataGrid>
+}
+
+@code {
+    IQueryable<MedicalSpecialty>? medicalSpecialties;
+
+    protected override async Task OnInitializedAsync()
+    {
+        medicalSpecialties = (await medicalSpecialtyRepository.GetAll()).AsQueryable();
+    }
+}

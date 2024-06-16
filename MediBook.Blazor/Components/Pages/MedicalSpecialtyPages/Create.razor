@@ -1,0 +1,44 @@
+﻿@page "/medicalspecialties/create";
+@using MediBook.Domain.Entities;
+@inject MediBook.Domain.Abstractions.IMedicalSpecialtyRepository medicalSpecialtyRepository;
+@inject NavigationManager NavigationManager;
+@inject IToastService ToastService;
+@rendermode InteractiveServer
+
+<PageTitle>Adicionar Especialidade</PageTitle>
+
+<h1>Especialidade</h1>
+
+<h4>Adicionar</h4>
+<hr />
+<FluentGrid>
+    <FluentGridItem xs="6" sm="6">
+        <EditForm Model="MedicalSpecialty" method="post" OnValidSubmit="AddMedicalSpecialty" FormName="registerMedicalSpecialty" Enhance="true">
+            <DataAnnotationsValidator />
+            <FluentStack Orientation="Orientation.Vertical">
+                <FluentTextField Name="MedicalSpecialty.Name" @bind-Value="MedicalSpecialty.Name" Required="true" Placeholder="Especialidade..." Label="Nome" Style="width: 100%" />
+                <FluentValidationMessage For="() => MedicalSpecialty.Name" class="text-danger" />
+                <br/>
+                <FluentButton Type="ButtonType.Submit" Appearance="Appearance.Accent" Style="width: 100%">Salvar</FluentButton>
+            </FluentStack>
+        </EditForm>
+    </FluentGridItem>
+</FluentGrid>
+
+<div>
+    <br /><br /><br />
+    <a href="/medicalspecialties">Voltar</a>
+</div>
+
+@code {
+    [SupplyParameterFromForm]
+    public MedicalSpecialty MedicalSpecialty { get; set; } = new("");
+
+    public async Task AddMedicalSpecialty()
+    {
+        MedicalSpecialty.Active = true;
+        await medicalSpecialtyRepository.Add(MedicalSpecialty);
+        ToastService.ShowSuccess("Especialidade salva com sucesso");
+        NavigationManager.NavigateTo("/medicalspecialties");
+    }
+}

@@ -1,0 +1,61 @@
+﻿@page "/medicalspecialties/delete"
+@using MediBook.Domain.Entities
+@inject MediBook.Domain.Abstractions.IMedicalSpecialtyRepository medicalSpecialtyRepository
+@inject IToastService ToastService;
+@inject NavigationManager NavigationManager
+
+<PageTitle>Deletar Especialidade</PageTitle>
+
+<h1>Especialidade</h1>
+
+<h3>Deseja mesmo deletar a especialiadade?</h3>
+<hr />
+<div>
+    @if (medicalspecialty is null)
+    {
+        <img src="/images/loading.gif" height="120" width="120" />
+        <br />
+    }
+    else {
+        <dl class="row">
+            <dt class="col-sm-2">Nome</dt>
+            <dd class="col-sm-10">@medicalspecialty.Name</dd>
+        </dl>
+        <FluentGrid>
+            <FluentGridItem xs="6" sm="6">
+                <EditForm method="post" Model="medicalspecialty" OnValidSubmit="DeleteMedicalSpecialty" FormName="delete">
+                    <FluentButton Type="ButtonType.Submit" disabled="@(medicalspecialty is null)" BackgroundColor="red" Color="white" Appearance="Appearance.Accent" Style="width: 100%">Deletar</FluentButton>
+                </EditForm>
+            </FluentGridItem>
+        </FluentGrid>
+        
+        <div>
+            <br /><br /><br />
+            <a href="/medicalspecialties">Voltar</a>
+        </div>
+    }
+</div>
+
+@code {
+    MedicalSpecialty? medicalspecialty;
+
+    [SupplyParameterFromQuery]
+    public Guid MedicalSpecialtyId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        medicalspecialty = await medicalSpecialtyRepository.Get(MedicalSpecialtyId);
+
+        if (medicalspecialty is null)
+        {
+            NavigationManager.NavigateTo("notfound");
+        }
+    }
+
+    public async Task DeleteMedicalSpecialty()
+    {
+        await medicalSpecialtyRepository.Delete(MedicalSpecialtyId);
+        ToastService.ShowSuccess("Especialidade deletada com sucesso");
+        NavigationManager.NavigateTo("/medicalspecialties");
+    }
+}

@@ -1,0 +1,383 @@
+﻿@page "/appointments/create"
+@inject IDoctorRepository doctorRepository
+@inject IMedicalDiaryRepository medicalDiaryRepository
+@inject IAppointmentRepository appointmentRepository
+@inject NavigationManager NavigationManager
+@inject IToastService ToastService;
+@inject UserData userData
+@inject IPatientRepository patientRepository;
+@inject IdentityUserAccessor UserAccessor
+@inject IHttpContextAccessor httpContextAccessor
+@rendermode InteractiveServer
+@using MediBook.Blazor.Components.Account
+@using MediBook.Domain.Abstractions
+@using MediBook.Domain.Entities
+@using MediBook.Domain.Models
+
+
+<PageTitle>Adicionar Consulta</PageTitle>
+
+<h1>Consulta</h1>
+
+<h4>Adicionar</h4>
+<hr />
+
+<FluentGrid Justify="JustifyContent.Center">
+    <FluentGridItem xs="6" sm="6">
+        <FluentCombobox Items=@appointmentTypes
+                        OptionText="@(i => i.Text)"
+                        OptionValue="@(i => i.Value)"
+                        OptionSelected="@(i => i.Selected)"
+                        AriaLabel="Tipo da consulta"
+                        Width="100%"
+                        Placeholder="Selecione o Tipo da consulta"
+                        Multiple="false"
+                        readonly
+                        Autocomplete="ComboboxAutocomplete.List"
+                        TOption="Option<string>"
+                        SelectedOptionChanged="p => ChangeAppointmentType(p)">
+            <LabelTemplate>
+                Tipo da consulta
+            </LabelTemplate>
+        </FluentCombobox>
+    </FluentGridItem>
+    @if (userData.UserType == UserType.Admin)
+    {
+        <FluentGridItem xs="6" sm="6">
+        <FluentCombobox Items=@patientOptions
+                            OptionText="@(i => i.Text)"
+                            OptionValue="@(i => i.Value)"
+                            OptionSelected="@(i => i.Selected)"
+                            AriaLabel="Paciente"
+                            Width="100%"
+                            Placeholder="Selecione o Paciente"
+                            Multiple="false"
+                            readonly
+                            Autocomplete="ComboboxAutocomplete.List"
+                            TOption="Option<string>"
+                            SelectedOptionChanged="p => ChangePatient(p)">
+                <LabelTemplate>
+                    Paciente
+                </LabelTemplate>
+            </FluentCombobox>
+        </FluentGridItem>
+    }
+
+    <FluentGridItem xs="6" sm="6">
+        <FluentCombobox Items=@doctorOptions
+                        OptionText="@(i => i.Text)"
+                        OptionValue="@(i => i.Value)"
+                        OptionSelected="@(i => i.Selected)"
+                        AriaLabel="Médico"
+                        Width="100%"
+                        Placeholder="Selecione o médico"
+                        Multiple="false"
+                        readonly
+                        Autocomplete="ComboboxAutocomplete.List"
+                        TOption="Option<string>"
+                        SelectedOptionChanged="d => ChangeDoctor(d)">
+            <LabelTemplate>
+                Médico
+            </LabelTemplate>
+        </FluentCombobox>
+    </FluentGridItem>
+
+    @if (!string.IsNullOrWhiteSpace(doctorId))
+    {
+        <FluentGridItem xs="6" sm="6">
+            <FluentCombobox Items=@medicalSpecialtyOptions
+                            OptionText="@(i => i.Text)"
+                            OptionValue="@(i => i.Value)"
+                            OptionSelected="@(i => i.Selected)"
+                            TOption="Option<string>"
+                            AriaLabel="Especialidade"
+                            Width="100%"
+                            Placeholder="Selecione a especialidade"
+                            Autocomplete="ComboboxAutocomplete.List"
+                            @bind-Value="medicalSpecialtyOption"
+                            SelectedOptionChanged="m => ChangeMedicalSpecialty(m)">
+                <LabelTemplate>
+                    Especialidade
+                </LabelTemplate>
+            </FluentCombobox>
+        </FluentGridItem>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(medicalSpecialtyId))
+    {
+        <FluentGridItem xs="7" sm="7">
+            <FluentLabel>Data</FluentLabel>
+            <FluentCalendar Value="@(SelectedDay)" ValueChanged="@(e => Changed(e ?? DateTime.MinValue))" DisabledDateFunc="@DisabledDay" Style="width: 100%" />
+        </FluentGridItem>
+
+        <FluentGridItem xs="5" sm="5">
+            <FluentLabel>Horário</FluentLabel>
+            @if (times.Count > 0)
+            {
+                <FluentListbox TOption="Option<string>"
+                                Items="@times"
+                                Height="250px"
+                                OptionValue="@(p => p.Value)"
+                                OptionText="@(p => p.Text)"
+                @bind-Value="@selectedTime" />
+            }
+            else
+            {
+                <p>Nenhum horário disponível para a data selecionada</p>
+            }
+        </FluentGridItem>
+        <br />
+        <FluentButton Type="ButtonType.Button" OnClick="@CreateAppointment" Appearance="Appearance.Accent" Style="width: 40%;margin-top: 20px">Agendar</FluentButton>
+        <br />
+    }
+</FluentGrid>
+
+<div>
+    <br /><br />
+    <a href="/medicaldiaries">Voltar</a>
+</div>
+
+@code {
+    [SupplyParameterFromForm]
+    MedicalDiary medicalDiary { get; set; } = new(DateTime.Now, true);
+    List<Option<string>> patientOptions = [];
+    List<Option<string>> doctorOptions = [];
+    List<Option<string>> medicalSpecialtyOptions = [];
+    List<Option<string>> times = [];
+    List<Option<string>> appointmentTypes = [];
+    IEnumerable<Doctor> doctors = null!;
+    IEnumerable<Patient> patients = null!;
+    string? doctorId;
+    string? patientId;
+    string? appointmentType;
+    string? medicalSpecialtyId;
+    string? selectedTime;
+    string? medicalSpecialtyOption;
+    List<DateTime> AvailableDates = [];
+    bool DisabledDay(DateTime date) => !AvailableDates.Contains(date);
+    DateTime SelectedDay = DateTime.Today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        appointmentTypes = Enum.GetValues(typeof(Domain.Enums.AppointmentTypeTranslated)).Cast<Domain.Enums.AppointmentTypeTranslated>().Select(a => new Option<string>()
+        {
+            Value = a.ToString(),
+            Text = a.ToString(),
+        }).ToList();
+
+        if (userData.UserType == UserType.Admin)
+        {
+            patients = await patientRepository.GetAll();
+            patientOptions = patients.Select(d => new Option<string>()
+                {
+                    Text = d.Name,
+                    Value = d.PatientID.ToString()
+                }).ToList();
+        }
+
+        doctors = await doctorRepository.GetAll();
+        doctorOptions = doctors.Select(d => new Option<string>()
+            {
+                Text = d.Name,
+                Value = d.DoctorId.ToString()
+            }).ToList();
+    }
+
+    void ChangeDoctor(Option<string> selectedOption)
+    {
+        if (selectedOption == null)
+        {
+            return;
+        }
+
+        doctorId = selectedOption.Value;
+        medicalSpecialtyOption = "";
+        var doctor = doctors.FirstOrDefault(d => d.DoctorId.ToString() == selectedOption.Value);
+        if (doctor != null)
+        {
+            medicalSpecialtyOptions = doctor.DoctorMedicalSpecialty
+                                            .Select(d => d.MedicalSpecialty)
+                                            .Select(m => new Option<string>()
+                                                {
+                                                    Text = m.Name,
+                                                    Value = m.MedicalSpecialtyId.ToString()
+                                                }).ToList();
+        }
+    }
+
+    void ChangePatient(Option<string> selectedOption)
+    {
+        if (selectedOption == null)
+        {
+            return;
+        }
+
+        patientId = selectedOption.Value;      
+    }
+
+    void ChangeAppointmentType(Option<string> selectedOption)
+    {
+        if (selectedOption == null)
+        {
+            return;
+        }
+
+        appointmentType = selectedOption.Value;
+    }
+
+    async Task ChangeMedicalSpecialty(Option<string> selectedOption)
+    {
+        if (selectedOption == null)
+        {
+            return;
+        }
+
+        medicalSpecialtyOption = selectedOption.Text;
+        medicalSpecialtyId = selectedOption.Value;
+
+        await LoadAvailableDates();
+    }
+
+    async Task LoadAvailableDates()
+    {
+        if (doctorId is null || medicalSpecialtyId is null)
+        {
+            times = [];
+            return;
+        }
+
+        IEnumerable<MedicalDiary> medicalDiary = [];
+        medicalDiary = await medicalDiaryRepository.GetByDoctorAndMedicalSpecialty(Guid.Parse(doctorId), Guid.Parse(medicalSpecialtyId));
+
+        if (!medicalDiary.Any())
+        {
+            times = [];
+            return;
+        }
+
+        AvailableDates = medicalDiary.OrderBy(m => m.DateAndTime).Select(m => m.DateAndTime.Date).ToList();
+        SelectedDay = AvailableDates.FirstOrDefault();
+
+        await LoadAvailableTimes();
+    }
+
+    async Task Changed(DateTime date)
+    {
+        if (date == DateTime.MinValue)
+        {
+            return;
+        }
+
+        times = [];
+        selectedTime = "";
+        SelectedDay = date;
+
+        await LoadAvailableTimes();
+    }
+
+    async Task LoadAvailableTimes()
+    {
+        if (doctorId is null || medicalSpecialtyId is null)
+        {
+            times = [];
+            return;
+        }
+
+        IEnumerable<MedicalDiary> medicalDiary = [];
+        medicalDiary = await medicalDiaryRepository.GetAvailableByDoctorMedicalSpecialtyAndDate(Guid.Parse(doctorId), Guid.Parse(medicalSpecialtyId), SelectedDay);
+
+        if (!medicalDiary.Any())
+        {
+            times = [];
+            return;
+        }
+
+        times = medicalDiary.OrderBy(m => m.DateAndTime).Select(m => new Option<string>()
+        {
+            Text = m.DateAndTime.ToString("HH:mm"),
+            Value = m.DateAndTime.ToString("HH:mm")
+        }).ToList();
+    }
+
+    Domain.Enums.AppointmentType MapAppointmentType() {
+        switch (appointmentType)
+        {
+            default:
+            case "Primeira":
+                return Domain.Enums.AppointmentType.First;
+            case "Retorno":
+                return Domain.Enums.AppointmentType.Return;
+            case "Exame":
+                return Domain.Enums.AppointmentType.Exam;
+            case "Cirurgia":
+                return Domain.Enums.AppointmentType.Surgery;
+        }
+    }
+
+    async Task CreateAppointment()
+    {
+        try
+        {
+            if (userData.UserType == UserType.Admin && string.IsNullOrWhiteSpace(patientId))
+            {
+                ToastService.ShowError("Nenhum paciente selecionado");
+                return;
+            }
+
+            if (httpContextAccessor?.HttpContext != null && string.IsNullOrWhiteSpace(patientId))
+            {
+                var user = await UserAccessor.GetRequiredUserAsync(httpContextAccessor.HttpContext);
+                var patient = await patientRepository.GetByUser(user.Id);
+                patientId = patient.PatientID.ToString();
+            }
+
+            if (string.IsNullOrWhiteSpace(patientId))
+            {
+                throw new Exception("User could not be selected");
+            }
+
+            if (string.IsNullOrWhiteSpace(doctorId))
+            {
+                ToastService.ShowError("Nenhum médico selecionado");
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(medicalSpecialtyId))
+            {
+                ToastService.ShowError("Nenhuma especialidade selecionada");
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(selectedTime))
+            {
+                ToastService.ShowError("Nenhum horário selecionado");
+                return;
+            }
+
+            var diaryDate = SelectedDay;
+            DateTime.TryParseExact(selectedTime, "HH:mm", null, System.Globalization.DateTimeStyles.None, out var time);
+            diaryDate = diaryDate.AddHours(time.Hour);
+            diaryDate = diaryDate.AddMinutes(time.Minute);
+
+            IEnumerable<MedicalDiary> medicalDiaryDate = [];
+            medicalDiaryDate = await medicalDiaryRepository.GetAvailableByDoctorMedicalSpecialtyAndDate(Guid.Parse(doctorId), Guid.Parse(medicalSpecialtyId), diaryDate.Date);
+
+            var medicalDiary = medicalDiaryDate.FirstOrDefault(m => m.DateAndTime == diaryDate);
+
+            if (medicalDiary == null)
+            {
+                ToastService.ShowError("Não foi possível selecionar a consulta. Revise os dados e tente novamente");
+                return;
+            }
+
+            var appointmentType = MapAppointmentType();
+            var appointment = new Appointment(Guid.Parse(patientId), medicalDiary.MedicalDiaryId, false, appointmentType, Domain.Enums.AppointmentStatus.Scheduled, true);
+            await appointmentRepository.Add(appointment);
+
+            ToastService.ShowSuccess("Consulta agendada com sucesso");
+            NavigationManager.NavigateTo("/appointments");
+        }
+        catch
+        {
+            ToastService.ShowError("Ocorreu um erro ao salvar a agenda. Revise os dados e tente novamente");
+        }
+    }
+}
